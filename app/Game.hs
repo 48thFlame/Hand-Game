@@ -1,4 +1,4 @@
-module Game (newGame, Game (..), aToA, aToB, bToA, bToB) where
+module Game (newGame, Game (..), TurnAction (..), playTurn) where
 
 newPlayer :: Player
 newPlayer =
@@ -20,9 +20,11 @@ addToHandB Player{a = a_, b = b_} n =
 
 newGame :: Game
 newGame =
-    Game newPlayer newPlayer True
+    Game newPlayer newPlayer Plr1sTurn
 
-data Game = Game {player1 :: Player, player2 :: Player, player1Turn :: Bool}
+data GameState = Plr1sTurn | Plr2sTurn | Plr1Won | Plr2Won | Draw deriving (Eq)
+
+data Game = Game {player1 :: Player, player2 :: Player, gameState :: GameState}
 
 {- |
 Example of how it looks:
@@ -32,42 +34,95 @@ Example of how it looks:
 ------------------
 -}
 instance Show Game where
-    show Game{player1 = plr1, player2 = plr2, player1Turn = isPlr1} =
+    show Game{player1 = plr1, player2 = plr2, gameState = state} =
         let line = "------------------"
          in concat
                 [ line
                 , "\n| "
-                , if isPlr1 then "-> " else "   "
+                , if state == Plr1sTurn then "-> " else "   "
                 , "Plr1: "
                 , show plr1
                 , " |\n| "
-                , if not isPlr1 then "-> " else "   "
+                , if state == Plr2sTurn then "-> " else "   "
                 , "Plr2: "
                 , show plr2
                 , " |\n"
+                , case state of
+                    Draw ->
+                        "|  It's a Draw!  |\n"
+                    Plr1Won ->
+                        "|   Plr 1 won!   |\n"
+                    Plr2Won ->
+                        "|   Plr 2 won!   |\n"
+                    _ -> ""
                 , line
                 ]
 
-aToA :: Game -> Game
-aToA g@Game{player1 = plr1, player2 = plr2, player1Turn = True} =
-    g{player2 = addToHandA plr2 (a plr1), player1Turn = False}
-aToA g@Game{player1 = plr1, player2 = plr2, player1Turn = False} =
-    g{player1 = addToHandA plr1 (a plr2), player1Turn = True}
+checkVictoryOr :: GameState -> Game -> GameState
+checkVictoryOr orState Game{player1 = plr1, player2 = plr2}
+    | a plr1 + b plr1 == 0 = Plr2Won
+    | a plr2 + b plr2 == 0 = Plr1Won
+    | otherwise = orState -- TODO: check for Draw!
 
-aToB :: Game -> Game
-aToB g@Game{player1 = plr1, player2 = plr2, player1Turn = True} =
-    g{player2 = addToHandB plr2 (a plr1), player1Turn = False}
-aToB g@Game{player1 = plr1, player2 = plr2, player1Turn = False} =
-    g{player1 = addToHandB plr1 (a plr2), player1Turn = True}
+data TurnAction
+    = AToA
+    | AToB
+    | BToA
+    | BToB
 
-bToA :: Game -> Game
-bToA g@Game{player1 = plr1, player2 = plr2, player1Turn = True} =
-    g{player2 = addToHandA plr2 (b plr1), player1Turn = False}
-bToA g@Game{player1 = plr1, player2 = plr2, player1Turn = False} =
-    g{player1 = addToHandA plr1 (b plr2), player1Turn = True}
+{- | find out whether the action is legal
+for example if going from `a to a` then check whether both players have a hands
+-}
+isLegal :: TurnAction -> Game -> Bool
+isLegal AToA Game{player1 = plr1, player2 = plr2} =
+    not (a plr1 == 0 || a plr2 == 0)
+isLegal BToB Game{player1 = plr1, player2 = plr2} =
+    not (b plr1 == 0 || b plr2 == 0)
+isLegal AToB Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    not (a plr1 == 0 || b plr2 == 0)
+isLegal AToB Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
+    not (b plr1 == 0 || a plr2 == 0)
+isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    not (b plr1 == 0 || a plr2 == 0)
+isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
+    not (a plr1 == 0 || b plr2 == 0)
+isLegal _ _ =
+    False
 
-bToB :: Game -> Game
-bToB g@Game{player1 = plr1, player2 = plr2, player1Turn = True} =
-    g{player2 = addToHandB plr2 (b plr1), player1Turn = False}
-bToB g@Game{player1 = plr1, player2 = plr2, player1Turn = False} =
-    g{player1 = addToHandB plr1 (b plr2), player1Turn = True}
+-- | assumes its Plr1sTurn!
+makeMoveForPlr1 :: TurnAction -> Game -> Game
+makeMoveForPlr1 AToA g@Game{player1 = plr1, player2 = plr2} =
+    g{player2 = addToHandA plr2 (a plr1)}
+makeMoveForPlr1 AToB g@Game{player1 = plr1, player2 = plr2} =
+    g{player2 = addToHandB plr2 (a plr1)}
+makeMoveForPlr1 BToA g@Game{player1 = plr1, player2 = plr2} =
+    g{player2 = addToHandA plr2 (b plr1)}
+makeMoveForPlr1 BToB g@Game{player1 = plr1, player2 = plr2} =
+    g{player2 = addToHandB plr2 (b plr1)}
+
+-- | assumes its Plr2sTurn!
+makeMoveForPlr2 :: TurnAction -> Game -> Game
+makeMoveForPlr2 AToA g@Game{player1 = plr1, player2 = plr2} =
+    g{player1 = addToHandA plr1 (a plr2)}
+makeMoveForPlr2 AToB g@Game{player1 = plr1, player2 = plr2} =
+    g{player1 = addToHandB plr1 (a plr2)}
+makeMoveForPlr2 BToA g@Game{player1 = plr1, player2 = plr2} =
+    g{player1 = addToHandA plr1 (b plr2)}
+makeMoveForPlr2 BToB g@Game{player1 = plr1, player2 = plr2} =
+    g{player1 = addToHandB plr1 (b plr2)}
+
+playTurn :: TurnAction -> Game -> Game
+playTurn action g@Game{gameState = Plr1sTurn} =
+    if isLegal action g
+        then
+            let movedG = makeMoveForPlr1 action g
+             in movedG{gameState = checkVictoryOr Plr2sTurn movedG}
+        else g
+playTurn action g@Game{gameState = Plr2sTurn} =
+    if isLegal action g
+        then
+            let movedG = makeMoveForPlr2 action g
+             in movedG{gameState = checkVictoryOr Plr1sTurn movedG}
+        else g
+playTurn _ g =
+    g
