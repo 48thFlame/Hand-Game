@@ -1,8 +1,17 @@
-module Game (Player (..), newGame, Game (..), TurnAction (..), playTurn) where
+module Game (
+    Player (..),
+    newGame,
+    Game (..),
+    TurnAction (..),
+    playTurn,
+    getLegalMoves,
+) where
+
+import qualified Data.List as List
 
 newPlayer :: Player
 newPlayer =
-    Player 1 1
+    Player 0 0
 
 data Player = Player {a :: Int, b :: Int}
 
@@ -70,39 +79,40 @@ data TurnAction
     | BToA
     | BToB
     | Split
+    deriving (Show)
 
 {- | find out whether the action is legal
 for example if going from `a to a` then check whether both players have a hands
 -}
-isLegal :: TurnAction -> Game -> Bool
-isLegal AToA Game{player1 = plr1, player2 = plr2} =
+isLegal :: Game -> TurnAction -> Bool
+isLegal Game{player1 = plr1, player2 = plr2} AToA =
     not (a plr1 == 0 || a plr2 == 0)
-isLegal BToB Game{player1 = plr1, player2 = plr2} =
+isLegal Game{player1 = plr1, player2 = plr2} BToB =
     not (b plr1 == 0 || b plr2 == 0)
-isLegal AToB Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+isLegal Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} AToB =
     not (a plr1 == 0 || b plr2 == 0)
-isLegal AToB Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
+isLegal Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} AToB =
     not (b plr1 == 0 || a plr2 == 0)
-isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+isLegal Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} BToA =
     not (b plr1 == 0 || a plr2 == 0)
-isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
+isLegal Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} BToA =
     not (a plr1 == 0 || b plr2 == 0)
-isLegal Split Game{player1 = plr1, gameState = Plr1sTurn} =
-    (a1 == 0 || b1 == 0) && even (a1 + b1)
+isLegal Game{player1 = plr1, gameState = Plr1sTurn} Split =
+    ((a1 == 0) /= (b1 == 0)) && even (a1 + b1)
   where
     a1 = a plr1
     b1 = b plr1
-isLegal Split Game{player2 = plr2, gameState = Plr2sTurn} =
-    (a2 == 0 || b2 == 0) && even (a2 + b2)
+isLegal Game{player2 = plr2, gameState = Plr2sTurn} Split =
+    ((a2 == 0) /= (b2 == 0)) && even (a2 + b2)
   where
     a2 = a plr2
     b2 = b plr2
 isLegal _ _ =
     False
 
--- TODO: make readable with case?
-
--- | assumes action is legal
+{- | assumes action is legal
+TODO: make readable with case?
+-}
 makeMove :: TurnAction -> Game -> Game
 makeMove AToA g@Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
     g{player2 = addToHandA plr2 (a plr1)}
@@ -138,8 +148,12 @@ playTurn action g@Game{gameState = state} =
             g
   where
     doTheTurn otherPlr =
-        if isLegal action g
+        if isLegal g action
             then
                 let movedG = makeMove action g
                  in movedG{gameState = checkVictoryOr otherPlr movedG}
             else g
+
+getLegalMoves :: Game -> [TurnAction]
+getLegalMoves g =
+    List.filter (isLegal g) [AToA, AToB, BToA, BToB, Split]
