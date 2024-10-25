@@ -7,13 +7,16 @@ gameLoop 0 g =
     print g
 gameLoop n g = do
     print g
-    gameLoop (n - 1) (playTurn AToA g)
+
+    gameLoop (n - 1) (playTurn AToB g)
 
 main :: IO ()
 main = do
     -- let a = newPlayer
     -- print a
-    gameLoop 7 newGame
+    gameLoop 9 newGame
+
+-- gameLoop 2 newGame{player2 = Player{b = 0, a = 4}, player1 = Player{b = 2, a = 0}}
 
 -- let g = newGame
 -- print g

@@ -1,4 +1,4 @@
-module Game (newGame, Game (..), TurnAction (..), playTurn) where
+module Game (Player (..), newGame, Game (..), TurnAction (..), playTurn) where
 
 newPlayer :: Player
 newPlayer =
@@ -69,6 +69,7 @@ data TurnAction
     | AToB
     | BToA
     | BToB
+    | Split
 
 {- | find out whether the action is legal
 for example if going from `a to a` then check whether both players have a hands
@@ -86,43 +87,59 @@ isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
     not (b plr1 == 0 || a plr2 == 0)
 isLegal BToA Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
     not (a plr1 == 0 || b plr2 == 0)
+isLegal Split Game{player1 = plr1, gameState = Plr1sTurn} =
+    (a1 == 0 || b1 == 0) && even (a1 + b1)
+  where
+    a1 = a plr1
+    b1 = b plr1
+isLegal Split Game{player2 = plr2, gameState = Plr2sTurn} =
+    (a2 == 0 || b2 == 0) && even (a2 + b2)
+  where
+    a2 = a plr2
+    b2 = b plr2
 isLegal _ _ =
     False
 
--- | assumes its Plr1sTurn!
-makeMoveForPlr1 :: TurnAction -> Game -> Game
-makeMoveForPlr1 AToA g@Game{player1 = plr1, player2 = plr2} =
-    g{player2 = addToHandA plr2 (a plr1)}
-makeMoveForPlr1 AToB g@Game{player1 = plr1, player2 = plr2} =
-    g{player2 = addToHandB plr2 (a plr1)}
-makeMoveForPlr1 BToA g@Game{player1 = plr1, player2 = plr2} =
-    g{player2 = addToHandA plr2 (b plr1)}
-makeMoveForPlr1 BToB g@Game{player1 = plr1, player2 = plr2} =
-    g{player2 = addToHandB plr2 (b plr1)}
+-- TODO: make readable with case?
 
--- | assumes its Plr2sTurn!
-makeMoveForPlr2 :: TurnAction -> Game -> Game
-makeMoveForPlr2 AToA g@Game{player1 = plr1, player2 = plr2} =
+-- | assumes action is legal
+makeMove :: TurnAction -> Game -> Game
+makeMove AToA g@Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    g{player2 = addToHandA plr2 (a plr1)}
+makeMove AToB g@Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    g{player2 = addToHandB plr2 (a plr1)}
+makeMove BToA g@Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    g{player2 = addToHandA plr2 (b plr1)}
+makeMove BToB g@Game{player1 = plr1, player2 = plr2, gameState = Plr1sTurn} =
+    g{player2 = addToHandB plr2 (b plr1)}
+makeMove Split g@Game{player1 = plr1, gameState = Plr1sTurn} =
+    let newHand = (a plr1 + b plr1) `div` 2
+     in g{player1 = Player{a = newHand, b = newHand}}
+makeMove AToA g@Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
     g{player1 = addToHandA plr1 (a plr2)}
-makeMoveForPlr2 AToB g@Game{player1 = plr1, player2 = plr2} =
+makeMove AToB g@Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
     g{player1 = addToHandB plr1 (a plr2)}
-makeMoveForPlr2 BToA g@Game{player1 = plr1, player2 = plr2} =
+makeMove BToA g@Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
     g{player1 = addToHandA plr1 (b plr2)}
-makeMoveForPlr2 BToB g@Game{player1 = plr1, player2 = plr2} =
+makeMove BToB g@Game{player1 = plr1, player2 = plr2, gameState = Plr2sTurn} =
     g{player1 = addToHandB plr1 (b plr2)}
+makeMove Split g@Game{player2 = plr2, gameState = Plr2sTurn} =
+    let newHand = (a plr2 + b plr2) `div` 2
+     in g{player2 = Player{a = newHand, b = newHand}}
+makeMove _ g =
+    g
 
 playTurn :: TurnAction -> Game -> Game
-playTurn action g@Game{gameState = Plr1sTurn} =
-    if isLegal action g
-        then
-            let movedG = makeMoveForPlr1 action g
-             in movedG{gameState = checkVictoryOr Plr2sTurn movedG}
-        else g
-playTurn action g@Game{gameState = Plr2sTurn} =
-    if isLegal action g
-        then
-            let movedG = makeMoveForPlr2 action g
-             in movedG{gameState = checkVictoryOr Plr1sTurn movedG}
-        else g
-playTurn _ g =
-    g
+playTurn action g@Game{gameState = state} =
+    case state of
+        Plr1sTurn -> doTheTurn Plr2sTurn
+        Plr2sTurn -> doTheTurn Plr1sTurn
+        _ ->
+            g
+  where
+    doTheTurn otherPlr =
+        if isLegal action g
+            then
+                let movedG = makeMove action g
+                 in movedG{gameState = checkVictoryOr otherPlr movedG}
+            else g
