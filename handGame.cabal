@@ -11,7 +11,7 @@ common warnings
 executable handGame
     import:           warnings
     main-is:          Main.hs
-    other-modules:    Game
-    build-depends:    base ^>=4.17.2.1
+    other-modules:    Game, Ai
+    build-depends:    base ^>=4.17.2.1, random
     hs-source-dirs:   app
     default-language: Haskell2010

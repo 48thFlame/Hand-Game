@@ -11,7 +11,7 @@ import qualified Data.List as List
 
 newPlayer :: Player
 newPlayer =
-    Player 0 0
+    Player 1 1
 
 data Player = Player {a :: Int, b :: Int}
 
@@ -139,8 +139,8 @@ makeMove Split g@Game{player2 = plr2, gameState = Plr2sTurn} =
 makeMove _ g =
     g
 
-playTurn :: TurnAction -> Game -> Game
-playTurn action g@Game{gameState = state} =
+playTurn :: Game -> TurnAction -> Game
+playTurn g@Game{gameState = state} action =
     case state of
         Plr1sTurn -> doTheTurn Plr2sTurn
         Plr2sTurn -> doTheTurn Plr1sTurn
