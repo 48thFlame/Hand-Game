@@ -5,9 +5,12 @@ module Game (
     TurnAction (..),
     playTurn,
     getLegalMoves,
+    hashGame,
 ) where
 
 import qualified Data.List as List
+import Data.Set (Set)
+import qualified Data.Set as Set
 
 newPlayer :: Player
 newPlayer =
@@ -29,11 +32,19 @@ addToHandB Player{a = a_, b = b_} n =
 
 newGame :: Game
 newGame =
-    Game newPlayer newPlayer Plr1sTurn
+    let plainGame = Game newPlayer newPlayer Plr1sTurn Set.empty
+     in plainGame{history = Set.singleton $ hashGame plainGame}
 
 data GameState = Plr1sTurn | Plr2sTurn | Plr1Won | Plr2Won | Draw deriving (Eq)
 
-data Game = Game {player1 :: Player, player2 :: Player, gameState :: GameState}
+type PositionHash = Int
+
+data Game = Game
+    { player1 :: Player
+    , player2 :: Player
+    , gameState :: GameState
+    , history :: Set PositionHash
+    }
 
 {- |
 Example of how it looks:
@@ -67,10 +78,30 @@ instance Show Game where
                 , line
                 ]
 
+hashGame :: Game -> PositionHash
+hashGame Game{player1 = plr1, player2 = plr2, gameState = state} =
+    stateNum + playersHash
+  where
+    stateNum =
+        ( case state of
+            Plr1sTurn -> 1
+            Plr2sTurn -> 2
+            Plr1Won -> 3
+            Plr2Won -> 4
+            Draw -> 5
+        )
+            * 10000
+    playersHash =
+        a plr1 * 1000
+            + b plr1 * 100
+            + a plr2 * 10
+            + b plr2
+
 checkVictoryOr :: GameState -> Game -> GameState
-checkVictoryOr orState Game{player1 = plr1, player2 = plr2}
+checkVictoryOr orState g@Game{player1 = plr1, player2 = plr2}
     | a plr1 + b plr1 == 0 = Plr2Won
     | a plr2 + b plr2 == 0 = Plr1Won
+    | Set.member (hashGame g) (history g) = Draw
     | otherwise = orState -- TODO: check for Draw!
 
 data TurnAction
@@ -85,6 +116,8 @@ data TurnAction
 for example if going from `a to a` then check whether both players have a hands
 -}
 isLegal :: Game -> TurnAction -> Bool
+isLegal Game{gameState = Draw} _ =
+    False
 isLegal Game{player1 = plr1, player2 = plr2} AToA =
     not (a plr1 == 0 || a plr2 == 0)
 isLegal Game{player1 = plr1, player2 = plr2} BToB =
@@ -151,7 +184,9 @@ playTurn g@Game{gameState = state} action =
         if isLegal g action
             then
                 let movedG = makeMove action g
-                 in movedG{gameState = checkVictoryOr otherPlr movedG}
+                    turnedG = movedG{gameState = checkVictoryOr otherPlr movedG}
+                    turnedGHash = hashGame turnedG
+                 in turnedG{history = Set.insert turnedGHash (history turnedG)}
             else g
 
 getLegalMoves :: Game -> [TurnAction]
