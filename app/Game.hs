@@ -2,10 +2,14 @@ module Game (
     Player (..),
     newGame,
     Game (..),
+    GameState (..),
     TurnAction (..),
+    PositionHash,
     playTurn,
     getLegalMoves,
+    startHash,
     hashGame,
+    unHashGame,
 ) where
 
 import qualified Data.List as List
@@ -32,10 +36,13 @@ addToHandB Player{a = a_, b = b_} n =
 
 newGame :: Game
 newGame =
-    let plainGame = Game newPlayer newPlayer Plr1sTurn Set.empty
-     in plainGame{history = Set.singleton $ hashGame plainGame}
+    Game newPlayer newPlayer Plr1sTurn (Set.singleton startHash)
 
 data GameState = Plr1sTurn | Plr2sTurn | Plr1Won | Plr2Won | Draw deriving (Eq)
+
+startHash :: PositionHash
+startHash =
+    11111
 
 type PositionHash = Int
 
@@ -78,6 +85,9 @@ instance Show Game where
                 , line
                 ]
 
+{- |
+11111
+-}
 hashGame :: Game -> PositionHash
 hashGame Game{player1 = plr1, player2 = plr2, gameState = state} =
     stateNum + playersHash
@@ -97,12 +107,39 @@ hashGame Game{player1 = plr1, player2 = plr2, gameState = state} =
             + a plr2 * 10
             + b plr2
 
+{- |
+splits the hash a 5-digit Tnt to a list of its digits.
+Don't know how works ask Claude
+-}
+digits :: Int -> [Int]
+digits 0 = []
+digits n = digits (n `div` 10) ++ [n `mod` 10]
+
+unHashGame :: PositionHash -> Game
+unHashGame h =
+    case digits h of
+        [state, a1, b1, a2, b2] ->
+            Game
+                { player1 = Player a1 b1
+                , player2 = Player a2 b2
+                , gameState =
+                    case state of
+                        1 -> Plr1sTurn
+                        2 -> Plr2sTurn
+                        3 -> Plr1Won
+                        4 -> Plr2Won
+                        5 -> Draw
+                        _ -> Draw
+                , history = Set.empty
+                }
+        _ -> newGame
+
 checkVictoryOr :: GameState -> Game -> GameState
 checkVictoryOr orState g@Game{player1 = plr1, player2 = plr2}
     | a plr1 + b plr1 == 0 = Plr2Won
     | a plr2 + b plr2 == 0 = Plr1Won
     | Set.member (hashGame g) (history g) = Draw
-    | otherwise = orState -- TODO: check for Draw!
+    | otherwise = orState
 
 data TurnAction
     = AToA
