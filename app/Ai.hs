@@ -1,12 +1,12 @@
-module Ai (randomAi, allPositions) where
+module Ai (randomAi, allPositions, makeAPTree) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 
--- import Data.Function ((&))
--- import qualified Data.List as List
--- import Data.Map (Map)
--- import qualified Data.Map as Map
+import qualified Data.List as List
+import Data.Map (Map)
+import qualified Data.Map as Map
+
 -- import Debug.Trace (trace, traceShow)
 -- import qualified GHC.Num as Set
 import Game
@@ -34,18 +34,51 @@ allPositions =
 genAllPositions :: Set PositionHash -> [PositionHash] -> Set PositionHash
 genAllPositions seenPos [] = seenPos
 genAllPositions seenPos (pos : unexplored) =
-    genAllPositions
-        (Set.insert pos seenPos)
-        (doGameGeneration seenPos pos ++ unexplored)
-
-doGameGeneration :: Set PositionHash -> PositionHash -> [PositionHash]
-doGameGeneration seenSet pos =
-    if Set.member pos seenSet
+    if Set.member pos seenPos
         then
-            []
+            -- do nothing, just keep the recursion going
+            genAllPositions seenPos unexplored
         else
-            let g = unHashGame pos
-             in map (hashGame . playTurn g) (getLegalMoves g)
+            genAllPositions
+                (Set.insert pos seenPos)
+                (doGameGeneration pos ++ unexplored)
+
+doGameGeneration :: PositionHash -> [PositionHash]
+doGameGeneration pos =
+    let g = unHashGame pos
+     in map (hashGame . playTurn g) (getLegalMoves g)
+
+-- | {position : origins}
+type APTree = Map PositionHash (Set PositionHash)
+
+{- |
+These function generate an `apt`
+by going threw `allPositions` and for each pos check its children
+and for each child update the map with adding the origin position.
+This is done with 2 folds.
+-}
+makeAPTree :: APTree
+makeAPTree =
+    let emptyAPT = Map.fromSet (const Set.empty) allPositions
+     in List.foldl'
+            updateAPTmap
+            emptyAPT
+            allPositions
+
+updateAPTmap :: APTree -> PositionHash -> APTree
+updateAPTmap apt originPos =
+    List.foldl'
+        ( \newestApt posToUpdate ->
+            Map.insert
+                posToUpdate
+                ( Set.insert
+                    originPos
+                    (newestApt Map.! posToUpdate)
+                )
+                newestApt
+        )
+        apt
+        (doGameGeneration originPos)
 
 {-
 If at end position - return
