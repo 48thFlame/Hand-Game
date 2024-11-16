@@ -1,8 +1,10 @@
-module Ai (randomAi, allPositions, makeAPTree) where
+module Ai (randomAi, allPositions, endingPositions, makeAPTree) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Data.Bifunctor
+import Data.Function ((&))
 import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -48,8 +50,18 @@ doGameGeneration pos =
     let g = unHashGame pos
      in map (hashGame . playTurn g) (getLegalMoves g)
 
--- | {position : origins}
-type APTree = Map PositionHash (Set PositionHash)
+endingPositions :: Set PositionHash
+endingPositions =
+    Set.filter (> 29999) allPositions
+
+-- | {position : (origins, evalScore)}
+type APTree = Map PositionHash (Set PositionHash, Int)
+
+makeAPTree :: APTree
+makeAPTree =
+    let emptyAPT = Map.fromSet (const (Set.empty, 0)) allPositions
+     in insertAPTOrigins emptyAPT
+            & insertAPTscore
 
 {- |
 These function generate an `apt`
@@ -57,28 +69,50 @@ by going threw `allPositions` and for each pos check its children
 and for each child update the map with adding the origin position.
 This is done with 2 folds.
 -}
-makeAPTree :: APTree
-makeAPTree =
-    let emptyAPT = Map.fromSet (const Set.empty) allPositions
-     in List.foldl'
-            updateAPTmap
-            emptyAPT
-            allPositions
+insertAPTOrigins :: APTree -> APTree
+insertAPTOrigins apt =
+    List.foldl'
+        updateAPTmapOrigins
+        apt
+        allPositions
 
-updateAPTmap :: APTree -> PositionHash -> APTree
-updateAPTmap apt originPos =
+{- |
+for each child of pos, update that location and add origin
+-}
+updateAPTmapOrigins :: APTree -> PositionHash -> APTree
+updateAPTmapOrigins apt originPos =
     List.foldl'
         ( \newestApt posToUpdate ->
-            Map.insert
-                posToUpdate
-                ( Set.insert
-                    originPos
-                    (newestApt Map.! posToUpdate)
-                )
-                newestApt
+            let mapPosToUpdateItem = newestApt Map.! posToUpdate
+             in Map.insert
+                    posToUpdate
+                    (Data.Bifunctor.first (Set.insert originPos) mapPosToUpdateItem)
+                    newestApt
         )
         apt
         (doGameGeneration originPos)
+
+insertAPTscore :: APTree -> APTree
+insertAPTscore apt =
+    List.foldl'
+        ( \newestApt posToUpdate ->
+            let mapPosToUpdateItem = newestApt Map.! posToUpdate
+             in Map.insert
+                    posToUpdate
+                    ( Data.Bifunctor.second
+                        ( const $
+                            if posToUpdate > 39999
+                                then
+                                    (-1)
+                                else -- its in the 3000's => Plr1Won
+                                    1
+                        )
+                        mapPosToUpdateItem
+                    )
+                    newestApt
+        )
+        apt
+        endingPositions
 
 {-
 If at end position - return
